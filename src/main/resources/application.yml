@@ -1,0 +1,57 @@
+server:
+  port: 8090
+
+app:
+  topic: employees
+  subject: employees-value                      # TopicNameStrategy: <topic>-value
+  schema-registry-url: http://localhost:8081    # tests override with mock://...
+  schema:
+    # Compatibility level applied to the subject at startup.
+    # Supported (io.confluent.kafka.schemaregistry.CompatibilityLevel):
+    #   NONE | BACKWARD | BACKWARD_TRANSITIVE | FORWARD | FORWARD_TRANSITIVE | FULL | FULL_TRANSITIVE
+    compatibility: BACKWARD
+    # true  = this file is the source of truth: the level is (re)applied on every startup
+    # false = leave whatever is set in the registry (e.g. after a runtime change via the API)
+    apply-on-startup: true
+
+spring:
+  application:
+    name: employee-schema-app
+
+  kafka:
+    # EXTERNAL listeners advertised via docker-compose - both are in same host
+    bootstrap-servers: localhost:19097,localhost:29097,localhost:39097
+
+    admin:
+      fail-fast: true            # fail at startup if the cluster is unreachable
+
+    listener:
+      missing-topics-fatal: true # topics are predefined via kafka-init;
+
+    producer:
+      acks: all
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializer
+      properties:
+        schema.registry.url: ${app.schema-registry-url}
+        auto.register.schemas: false     # schemas are predefined; no option to register via the app
+        use.latest.version: false        # app picks the version explicitly (Refer EmployeeEventController)
+        json.fail.invalid.schema: true   # reject payloads that violate the chosen schema version
+
+    consumer:
+      group-id: employee-consumer
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      # ErrorHandlingDeserializer wraps the real one so a bad record is logged and skipped
+      # instead of putting the listener into an endless failure loop
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializer
+        schema.registry.url: ${app.schema-registry-url}
+        json.value.type: org.lich.simple.employee.event.model.Employee   # bind to POJO, not generic JsonNode
+
+logging:
+  level:
+    root: INFO
+    org.apache.kafka.clients: WARN
+    io.confluent: WARN
