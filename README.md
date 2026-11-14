@@ -1,4 +1,4 @@
-# &#9842; mc-simple-employee-event-service
+# &#9842; mc-simple-employee-event-service.
 A simple employee event through schema registry
 ## &#1422; Setup
     Docker Instances
